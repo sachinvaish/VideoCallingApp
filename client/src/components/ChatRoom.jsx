@@ -13,6 +13,8 @@ export default function ChatRoom() {
   const [myCamera,setMyCamera]=useState(false);
   const [myStream, setMyStream]=useState('');
 
+  console.log( members);
+
   const leaveRoom = ()=>{
     socket.emit('room:exit',socket.id);
     navigate('/')
@@ -27,8 +29,8 @@ export default function ChatRoom() {
 
   const handleUserLeft = (data)=>{
       console.log(`${data} Left the Room`);
-      setRemoteSocket('');
-      setRemoteEmail('');
+      setRemoteSocket();
+      setRemoteEmail();
   }
 
   const handleCall=()=>{
@@ -75,7 +77,7 @@ export default function ChatRoom() {
         <div id='user-stream' className='flex flex-col'>
           <h3 className=' font-bold'>You</h3>
           {/* <div style={{width:'30em', height:'20em'}} className=' bg-slate-400'>Your Stream</div> */}
-          <ReactPlayer playing url={myStream} width={'30em'} height={'20em'} style={{border:'2px solid red'}} />
+          <ReactPlayer playing url={myStream} width={'30em'} height={'20em'} style={{border:'2px solid red',transform:'rotateY(180deg)'}} />
           <div className='flex gap-4'>
             {myCamera ? <FaVideoSlash onClick={handleStream}/> : <FaVideo onClick={handleStream}/>}
           </div>
