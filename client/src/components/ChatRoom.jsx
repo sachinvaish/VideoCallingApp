@@ -9,95 +9,85 @@ export default function ChatRoom() {
   const {roomID} = useParams();
   const navigate = useNavigate();
   const socket = useSocket();
-  const [remoteUser, setRemoteUser]=useState({});
-  const [myCamera,setMyCamera]=useState(false);
+  const[remoteSocket, setRemoteSocket]=useState('');
   const [myStream, setMyStream]=useState('');
   const [remoteStream, setRemoteStream]=useState('');
 
   const leaveRoom = ()=>{
+    console.log('function : leaveRoom()',{myStream});
     socket.emit('room:exit',socket.id);
     navigate('/')
   }
 
   const handleUserJoined = (data)=>{
+    console.log('function : handleUserJoined()',{myStream});
     const {email, id} = data;
     console.log(`${email} joined the Chatroom  ID : ${id}`);
-    setRemoteUser({email,id})
+    setRemoteSocket(id);
   }
 
   const handleUserLeft = (data)=>{
+    console.log('function : handleUserLeft()',{myStream});
       console.log(`${data} Left the Room`);
-      setRemoteUser('');
+      setRemoteSocket('');
   }
 
   const handleCall=async()=>{
+    console.log('function : handleCall()',{myStream});
     console.log('Calling the Remote User');
-    const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
+    // const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
     const offer = await peer.getOffer();
-    socket.emit('user:call',{ to:remoteUser.id, offer})
-    setMyStream(stream);
+    socket.emit('user:call',{ to:remoteSocket, offer})
+    // setMyStream(stream);
   }
 
   const handleIncomingCall=async({from, offer})=>{
-    // await handleStream();
-    setRemoteUser({...remoteUser, id:from});
-    const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
-    setMyStream(stream);
+    console.log('function : handleIncomingCall()',{myStream});
+    setRemoteSocket(from);
+    // const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
+    // setMyStream(stream);
     console.log('incoming call from :',from, offer)
     const ans = await peer.getAnswer(offer);
     socket.emit('call:accepted',{to:from, ans});
+    sendStreams();
   }
 
-  const sendStreams = ()=>{
-    for(const track of myStream.getTracks()){
-      peer.peer.addTrack(track, myStream);
+  const sendStreams = async ()=>{
+    const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
+    console.log('sendStream - ',{stream});
+    setMyStream(stream);
+    const tracks = stream.getTracks();
+    for(const track of tracks){
+      peer.peer.addTrack(track, stream);
     }
   }
 
-  const handleCallAccepted = async({from, ans})=>{
-    setRemoteUser({...remoteUser, id:from});
+  const handleCallAccepted =({from, ans})=>{
+    console.log('function : handleCallAccepted()',{myStream});
+    setRemoteSocket(from);
     peer.setLocalDescription(ans);
-    // await handleStream();
-    console.log({myStream, myCamera},remoteUser.email);
+    console.log({myStream, from,ans, remoteSocket});
     console.log('call accepted');
     sendStreams();
   }
 
-  // const handleStream=async()=>{
-  //   let stream;
-  //   // if(!myCamera){
-  //     console.log(`mycamera is ${myCamera} state`)
-      
-  //     if(stream){
-  //       setMyStream(stream);
-  //       console.log('setting myCamera == true')
-  //       setMyCamera(true);
-  //       console.log('in HandleStream()',{stream, myStream, myCamera});
-  //     }
-      
-  //   // }else{
-  //   //   console.log('mycamera is ON state')
-  //   //   setMyStream('');
-  //   //   setMyCamera(false)
-  //   // }
-  // }
-
-
   useEffect(()=>{
+    console.log('function : useEffect(blank)');
     peer.peer.addEventListener('track',async(ev)=>{
       const remoteStream = ev.streams
       setRemoteStream(remoteStream[0]);
       console.log('remote stream',remoteStream)
     })
-    console.log('useEffect track-eventlistener attached',{myCamera});
+    console.log('useEffect track-eventlistener attached');
   },[])
 
   useEffect(()=>{
+    console.log('function : useEffect([socket])');
       socket.on('user:joined',handleUserJoined)
       socket.on('user:left',handleUserLeft)
       socket.on('incoming:call', handleIncomingCall);
       socket.on('call:accepted', handleCallAccepted);
-      console.log('common useEffect called',{myCamera});
+      console.log('common useEffect called');
       return ()=>{
         socket.off('user:joined',handleUserJoined);
         socket.off('user:left',handleUserLeft);
@@ -113,17 +103,17 @@ export default function ChatRoom() {
         <h1 className="sm:text-5xl text-3xl text-blue-800 font-bold mb-10 ">Chat Room</h1>
         <button className='btn btn-danger ' onClick={leaveRoom}>Leave Room</button>
       </div>
-      {remoteUser.id ? <h2>You're joined in Room : {roomID}</h2> : <h2>No one in this Room</h2>}
-      {remoteUser.id &&
+      {remoteSocket ? <h2>You're joined in Room : {roomID}</h2> : <h2>No one in this Room</h2>}
+      {remoteSocket &&
         <div id='videoStream' className='flex flex-col lg:flex-row gap-5  min-w-max items-center lg:justify-center mt-5'>
         <div id='user-stream' className='flex flex-col'>
           <h3 className=' font-bold'>You</h3>
           {/* <div style={{width:'30em', height:'20em'}} className=' bg-slate-400'>Your Stream</div> */}
           <ReactPlayer playing url={myStream} width={'30em'} height={'20em'} style={{border:'2px solid red',transform:'rotateY(180deg)'}} />
         </div>
-        {remoteUser.email &&
+        {remoteSocket &&
           <div id='remote-user-stream' className='flex flex-col'>
-          <h3 className=' font-bold'>{remoteUser.email}</h3>
+          <h3 className=' font-bold'>Receiver's Stream {remoteSocket} id</h3>
           {/* <div style={{width:'30em', height:'20em'}} className=' bg-slate-400'>Receiver's Stream</div> */}
           <ReactPlayer playing url={remoteStream} width={'30em'} height={'20em'} style={{border:'2px solid red'}} />
         </div>
@@ -132,7 +122,7 @@ export default function ChatRoom() {
 
       }
       <div id='controls' className='flex justify-center w-full'>
-          {remoteUser.id && <button className='btn btn-green' onClick={handleCall}>Call</button>}
+          {remoteSocket && <button className='btn btn-green' onClick={handleCall}>Call</button>}
         </div>
     </div>
   )
