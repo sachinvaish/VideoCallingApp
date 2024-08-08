@@ -12,6 +12,7 @@ export default function ChatRoom() {
   const[remoteSocket, setRemoteSocket]=useState('');
   const [myStream, setMyStream]=useState('');
   const [remoteStream, setRemoteStream]=useState('');
+  const [remoteEmail, setRemoteEmail]=useState('');
 
   const leaveRoom = ()=>{
     console.log('function : leaveRoom()',{myStream});
@@ -24,6 +25,7 @@ export default function ChatRoom() {
     const {email, id} = data;
     console.log(`${email} joined the Chatroom  ID : ${id}`);
     setRemoteSocket(id);
+    setRemoteEmail(email);
   }
 
   const handleUserLeft = (data)=>{
@@ -44,12 +46,13 @@ export default function ChatRoom() {
   const handleIncomingCall=async({from, offer})=>{
     console.log('function : handleIncomingCall()',{myStream});
     setRemoteSocket(from);
-    // const stream = await navigator.mediaDevices.getUserMedia({video: true, audio:true});
-    // setMyStream(stream);
     console.log('incoming call from :',from, offer)
-    const ans = await peer.getAnswer(offer);
-    socket.emit('call:accepted',{to:from, ans});
-    sendStreams();
+    // const accepted = window.confirm(`Incoming Call from ${remoteEmail}`);
+    // if(accepted){
+      const ans = await peer.getAnswer(offer);
+      socket.emit('call:accepted',{to:from, ans});
+      sendStreams();
+    // }
   }
 
   const sendStreams = async ()=>{
@@ -71,6 +74,29 @@ export default function ChatRoom() {
     sendStreams();
   }
 
+  const handleNegoNeeded=async()=>{ 
+    const offer = await peer.getOffer();
+    socket.emit('peer:nego:needed',{to:remoteSocket, offer});
+  }
+
+  const handleNegoNeedIncoming = async ({from, offer})=>{
+    const ans = await peer.getAnswer(offer);
+    socket.emit('peer:nego:done',{to:from, ans});
+  }
+
+  const handleNegoFinal = async ({ans})=>{
+    await peer.setLocalDescription(ans);
+  }
+
+
+  useEffect(()=>{
+    peer.peer.addEventListener('negotiationneeded',handleNegoNeeded);
+    return ()=>{
+      peer.peer.removeEventListener('negotiationneeded',handleNegoNeeded)
+    }
+  },[handleNegoNeeded])
+
+
   useEffect(()=>{
     console.log('function : useEffect(blank)');
     peer.peer.addEventListener('track',async(ev)=>{
@@ -79,22 +105,26 @@ export default function ChatRoom() {
       console.log('remote stream',remoteStream)
     })
     console.log('useEffect track-eventlistener attached');
-  },[])
+  },[remoteStream])
 
   useEffect(()=>{
     console.log('function : useEffect([socket])');
-      socket.on('user:joined',handleUserJoined)
-      socket.on('user:left',handleUserLeft)
+      socket.on('user:joined',handleUserJoined);
+      socket.on('user:left',handleUserLeft);
       socket.on('incoming:call', handleIncomingCall);
       socket.on('call:accepted', handleCallAccepted);
+      socket.on('peer:nego:needed',handleNegoNeedIncoming);
+      socket.on('peer:nego:final',handleNegoFinal);
       console.log('common useEffect called');
       return ()=>{
         socket.off('user:joined',handleUserJoined);
         socket.off('user:left',handleUserLeft);
         socket.off('incoming:call', handleIncomingCall);
         socket.off('call:accepted', handleCallAccepted);
+        socket.off('peer:nego:needed',handleNegoNeedIncoming);
+        socket.off('peer:nego:final',handleNegoFinal);
       }
-  },[socket])
+  },[socket,handleUserJoined,handleUserLeft,handleIncomingCall,handleCallAccepted, handleNegoNeedIncoming,handleNegoFinal])
 
   return (
     <div>
@@ -115,7 +145,7 @@ export default function ChatRoom() {
           <div id='remote-user-stream' className='flex flex-col'>
           <h3 className=' font-bold'>Receiver's Stream {remoteSocket} id</h3>
           {/* <div style={{width:'30em', height:'20em'}} className=' bg-slate-400'>Receiver's Stream</div> */}
-          <ReactPlayer playing url={remoteStream} width={'30em'} height={'20em'} style={{border:'2px solid red'}} />
+          {remoteStream && <ReactPlayer playing url={remoteStream} width={'30em'} height={'20em'} style={{border:'2px solid red'}} />}
         </div>
         }
       </div>
